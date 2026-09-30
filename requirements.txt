@@ -1,0 +1,35 @@
+# StockSense — AI-Powered Stock Prediction System
+# Requirements
+
+# Core data
+yfinance==0.2.40
+pandas==2.2.2
+numpy==1.26.4
+
+# Technical indicators
+pandas-ta==0.3.14b0
+
+# Sentiment
+vaderSentiment==3.3.2
+transformers==4.40.1
+torch==2.3.0
+
+# ML models
+tensorflow==2.16.1
+keras==3.3.3
+xgboost==2.0.3
+scikit-learn==1.4.2
+joblib==1.4.2
+
+# Explainability
+shap==0.45.1
+
+# Dashboard
+streamlit==1.34.0
+plotly==5.22.0
+matplotlib==3.9.0
+
+# Utilities
+python-dotenv==1.0.1
+requests==2.32.3
+pyarrow==16.1.0
