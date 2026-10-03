@@ -62,7 +62,14 @@ def fetch_price_history(ticker: str, years: int = 5) -> pd.DataFrame:
             logger.info("Cache hit for %s — loading from %s", ticker, cache_path)
             df = pd.read_csv(cache_path, index_col="Date", parse_dates=True)
             df.index = df.index.tz_localize(None)
-            return df
+            required_start = datetime.today() - timedelta(days=years * 365 + 10)
+            if not df.empty and df.index.min().date() <= required_start.date():
+                return df
+            logger.info(
+                "Cached history for %s does not cover %d years; refreshing.",
+                ticker,
+                years,
+            )
 
     # Fetch from yfinance
     end = datetime.today()

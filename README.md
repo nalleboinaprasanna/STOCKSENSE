@@ -103,6 +103,29 @@ streamlit run dashboard/app.py
 
 Open http://localhost:8501
 
+### 5. Host the dashboard publicly
+
+The Streamlit dashboard can be deployed for free with [Streamlit Community
+Cloud](https://share.streamlit.io/). Push this repository to GitHub, then create
+an app with:
+
+- **Repository:** `nalleboinaprasanna/STOCKSENSE`
+- **Branch:** `main`
+- **Main file path:** `dashboard/app.py`
+- **Python version:** `3.12` (the pinned dependencies and saved XGBoost models
+  are compatible with it)
+
+The supported ticker models are included under `models/` so predictions work
+after deployment. A NewsAPI key is optional; to enable live news headlines,
+add this in the app's Streamlit Cloud **Secrets** settings:
+
+```toml
+NEWS_API_KEY = "your-newsapi-key"
+```
+
+Do not commit `.env` or API keys. Streamlit Community Cloud provides the public
+app URL after deployment.
+
 ---
 
 ## Feature Schema (31 dimensions)

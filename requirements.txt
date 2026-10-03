@@ -6,18 +6,13 @@ yfinance==0.2.40
 pandas==2.2.2
 numpy==1.26.4
 
-# Technical indicators
-pandas-ta==0.3.14b0
-
 # Sentiment
 vaderSentiment==3.3.2
 transformers==4.40.1
 torch==2.3.0
 
 # ML models
-tensorflow==2.16.1
-keras==3.3.3
-xgboost==2.0.3
+xgboost==3.4.1
 scikit-learn==1.4.2
 joblib==1.4.2
 

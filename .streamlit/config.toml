@@ -1,0 +1,10 @@
+[server]
+headless = true
+showEmailPrompt = false
+
+[theme]
+base = "light"
+primaryColor = "#0A0A0A"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F2F2"
+textColor = "#0A0A0A"

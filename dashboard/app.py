@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -37,8 +37,27 @@ try:
 except ImportError:
     pass
 
+# Streamlit Community Cloud secrets are not automatically environment variables.
+try:
+    os.environ.setdefault("NEWS_API_KEY", str(st.secrets["NEWS_API_KEY"]))
+except (KeyError, FileNotFoundError):
+    pass
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("app")
+
+_COMPANY_NAMES = {
+    "AAPL": "Apple",
+    "GOOGL": "Google",
+    "MSFT": "Microsoft",
+    "TSLA": "Tesla",
+}
+def _years_ago(value: date, years: int) -> date:
+    try:
+        return value.replace(year=value.year - years)
+    except ValueError:
+        return value.replace(year=value.year - years, day=28)
+
 
 # ── Streamlit page config ─────────────────────────────────────────────────────
 st.set_page_config(
@@ -86,24 +105,36 @@ def load_headlines(ticker: str):
 
 
 @st.cache_resource(show_spinner=False)
-def load_lstm_embedder():
+def load_lstm_embedder(ticker: str = ""):
     from modeling.lstm_model import LSTMEmbedder
-    model_path = _PROJECT_ROOT / "models" / "lstm_v1.pkl"
+    models_dir = _PROJECT_ROOT / "models"
+    # Try ticker-specific model first, then fall back to generic v1
+    candidates = []
+    if ticker:
+        candidates.append(models_dir / f"lstm_{ticker}.pkl")
+    candidates.append(models_dir / "lstm_v1.pkl")
     embedder = LSTMEmbedder()
-    if model_path.exists():
-        embedder.load(model_path)
-        return embedder
+    for model_path in candidates:
+        if model_path.exists():
+            embedder.load(model_path)
+            return embedder
     return None
 
 
 @st.cache_resource(show_spinner=False)
-def load_xgb_predictor():
+def load_xgb_predictor(ticker: str = ""):
     from modeling.xgb_classifier import XGBPredictor
-    model_path = _PROJECT_ROOT / "models" / "xgb_v1.json"
+    models_dir = _PROJECT_ROOT / "models"
+    # Try ticker-specific model first, then fall back to generic v1
+    candidates = []
+    if ticker:
+        candidates.append(models_dir / f"xgb_{ticker}.json")
+    candidates.append(models_dir / "xgb_v1.json")
     predictor = XGBPredictor()
-    if model_path.exists():
-        predictor.load(model_path)
-        return predictor
+    for model_path in candidates:
+        if model_path.exists():
+            predictor.load(model_path)
+            return predictor
     return None
 
 
@@ -119,20 +150,40 @@ def load_training_metrics() -> dict:
 # Inference pipeline (runs on demand)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def run_inference(ticker: str, years: int) -> dict:
+def run_inference(ticker: str, start_date: date, end_date: date) -> dict:
     """Run the full prediction pipeline for *ticker*.
+
+    Price data is fetched for the number of years needed to cover the
+    selected range, then indicators and displayed data are limited to it.
 
     Returns a dict with keys:
         direction, prob_up, shap_contributions, sentiment_series,
         headlines, ohlcv, indicators, error (optional)
     """
     result: dict = {}
+    years = min(10, max(1, ((end_date - start_date).days + 364) // 365))
 
     # ── Load data ─────────────────────────────────────────────────────────────
     with st.spinner("Fetching price data…"):
         try:
             ohlcv = load_price_data(ticker, years)
             indicators = load_indicators(ticker, years)
+            date_mask = (
+                (ohlcv.index.normalize() >= pd.Timestamp(start_date))
+                & (ohlcv.index.normalize() <= pd.Timestamp(end_date))
+            )
+            ohlcv = ohlcv.loc[date_mask]
+            indicators = indicators.loc[
+                (indicators.index.normalize() >= pd.Timestamp(start_date))
+                & (indicators.index.normalize() <= pd.Timestamp(end_date))
+            ]
+            if ohlcv.empty or indicators.empty:
+                return {
+                    "error": (
+                        "No price data is available for the selected date range. "
+                        "Choose a range containing trading days."
+                    )
+                }
         except Exception as exc:
             return {"error": str(exc)}
 
@@ -157,8 +208,8 @@ def run_inference(ticker: str, years: int) -> dict:
     result["daily_sentiment"] = daily_sent
 
     # ── Models ────────────────────────────────────────────────────────────────
-    embedder = load_lstm_embedder()
-    predictor = load_xgb_predictor()
+    embedder = load_lstm_embedder(ticker)
+    predictor = load_xgb_predictor(ticker)
 
     models_ready = embedder is not None and predictor is not None
 
@@ -224,7 +275,7 @@ def run_inference(ticker: str, years: int) -> dict:
 # Sidebar
 # ──────────────────────────────────────────────────────────────────────────────
 
-def render_sidebar() -> tuple[str, int]:
+def render_sidebar() -> tuple[str, date, date, bool]:
     with st.sidebar:
         st.markdown(
             '<h1 style="font-size:18px;margin-bottom:4px;">📈 StockSense</h1>'
@@ -233,20 +284,35 @@ def render_sidebar() -> tuple[str, int]:
         )
         st.markdown("---")
 
-        ticker = st.text_input(
+        default_ticker = os.getenv("DEFAULT_TICKER", "AAPL").upper().strip()
+        if default_ticker not in _COMPANY_NAMES:
+            default_ticker = "AAPL"
+
+        ticker = st.selectbox(
             "Ticker",
-            value=os.getenv("DEFAULT_TICKER", "AAPL"),
-            max_chars=10,
+            options=list(_COMPANY_NAMES),
+            index=list(_COMPANY_NAMES).index(default_ticker),
+            format_func=lambda symbol: f"{_COMPANY_NAMES[symbol]} ({symbol})",
             key="ticker_input",
-            help="Enter a stock ticker symbol, e.g. AAPL, TSLA, MSFT",
+            help="Select a supported company.",
         ).upper().strip()
 
-        years = st.selectbox(
+        today = date.today()
+        default_start = _years_ago(today, 5)
+        selected_dates = st.date_input(
             "History window",
-            options=[1, 2, 3, 5, 7, 10],
-            index=3,  # default: 5Y
-            key="years_select",
+            value=(default_start, today),
+            min_value=_years_ago(today, 10),
+            max_value=today,
+            format="YYYY-MM-DD",
+            key="history_dates",
+            help="Choose the start and end dates (up to 10 years of history).",
         )
+        if isinstance(selected_dates, tuple):
+            start_date = selected_dates[0] or selected_dates[1] or today
+            end_date = selected_dates[1] or selected_dates[0] or today
+        else:
+            start_date = end_date = selected_dates
 
         st.markdown("---")
         run_btn = st.button("▶ Run Prediction", use_container_width=True, key="run_btn")
@@ -254,8 +320,8 @@ def render_sidebar() -> tuple[str, int]:
         st.markdown("---")
 
         # Model status
-        embedder = load_lstm_embedder()
-        predictor = load_xgb_predictor()
+        embedder = load_lstm_embedder(ticker)
+        predictor = load_xgb_predictor(ticker)
         metrics = load_training_metrics()
 
         st.markdown('<h3 style="font-size:9pt;">Model Status</h3>', unsafe_allow_html=True)
@@ -292,7 +358,7 @@ def render_sidebar() -> tuple[str, int]:
                 unsafe_allow_html=True,
             )
 
-    return ticker, years, run_btn
+    return ticker, start_date, end_date, run_btn
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -300,21 +366,27 @@ def render_sidebar() -> tuple[str, int]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def main():
-    ticker, years, run_btn = render_sidebar()
+    ticker, start_date, end_date, run_btn = render_sidebar()
 
     # ── Page header ───────────────────────────────────────────────────────────
     st.markdown(
         f'<h1>StockSense &nbsp;<span style="color:#767676;font-weight:400;">'
-        f'{ticker}</span></h1>',
+        f'{_COMPANY_NAMES[ticker]} ({ticker})</span></h1>',
         unsafe_allow_html=True,
     )
 
     # Session state: hold results across reruns
+    inference_params = (ticker, start_date, end_date)
     if "result" not in st.session_state:
         st.session_state.result = None
 
-    if run_btn or st.session_state.result is None:
-        st.session_state.result = run_inference(ticker, years)
+    if (
+        run_btn
+        or st.session_state.result is None
+        or st.session_state.get("inference_params") != inference_params
+    ):
+        st.session_state.result = run_inference(ticker, start_date, end_date)
+        st.session_state.inference_params = inference_params
 
     result = st.session_state.result
 

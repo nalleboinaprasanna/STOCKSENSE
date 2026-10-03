@@ -39,10 +39,12 @@ _CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ── Reset / Base ─────────────────────────────────────────────────────── */
-html, body, [class*="css"] {
+html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"],
+[data-testid="stMain"], [data-testid="stHeader"], [data-testid="stBottom"],
+section[data-testid="stSidebar"], .main, .block-container {
     font-family: 'Inter', sans-serif;
     color: #0A0A0A;
-    background-color: #FFFFFF;
+    background-color: #FFFFFF !important;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -53,6 +55,29 @@ html, body, [class*="css"] {
 .main .block-container {
     max-width: 1200px;
     padding: 32px 32px 64px 32px;
+    background: #FFFFFF !important;
+}
+
+/* ── White app shell / inputs ─────────────────────────────────────────── */
+header[data-testid="stHeader"],
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stSidebar"],
+[data-testid="stBottom"] {
+    background-color: #FFFFFF !important;
+}
+div[data-baseweb="select"], div[data-baseweb="select"] > div,
+div[data-testid="stSelectbox"], div[data-testid="stSelectbox"] > div,
+.stSelectbox, div[data-testid="stDateInput"],
+div[data-testid="stDateInput"] input {
+    background: #FFFFFF;
+    color: #0A0A0A;
+}
+div[role="listbox"], div[role="option"], .stSelectbox [role="combobox"],
+div[data-baseweb="popover"], div[data-baseweb="calendar"],
+div[data-baseweb="calendar"] * {
+    background: #FFFFFF;
+    color: #0A0A0A;
 }
 
 /* ── Typography ───────────────────────────────────────────────────────── */
@@ -162,8 +187,8 @@ div[data-stale] { animation: none; }
 
 /* ── Sidebar ──────────────────────────────────────────────────────────── */
 section[data-testid="stSidebar"] {
-    width: 220px !important;
-    min-width: 220px !important;
+    width: 320px !important;
+    min-width: 320px !important;
     background: #FFFFFF;
     border-right: 1px solid #CFCFCF;
 }
