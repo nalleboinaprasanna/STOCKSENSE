@@ -54,7 +54,7 @@ class XGBPredictor:
             reg_lambda=2.0,
             eval_metric="logloss",
             random_state=42,
-            n_jobs=-1,
+            n_jobs=1,  # n_jobs=-1 causes segfault on Python 3.14
         )
 
         logger.info("Training XGBoost on %d samples, %d features.", len(X), X.shape[1])

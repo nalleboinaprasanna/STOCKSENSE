@@ -26,8 +26,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, accuracy_score
 
 # ── Project root on path ──────────────────────────────────────────────────────
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -93,9 +91,13 @@ def run(ticker: str = "AAPL", years: int = 5) -> None:
 
     embedder = LSTMEmbedder()
     embedder.train(X_lstm, y_lstm, epochs=30, batch_size=32, validation_split=0.2)
-    lstm_path = models_dir / "lstm_v1.h5"
+    lstm_path = models_dir / f"lstm_{ticker}.pkl"
     embedder.save(lstm_path)
-    logger.info("LSTM saved → %s", lstm_path)
+    # Also update the generic fallback so the dashboard always has a valid model
+    fallback_lstm = models_dir / "lstm_v1.pkl"
+    import shutil
+    shutil.copy2(lstm_path, fallback_lstm)
+    logger.info("LSTM saved → %s (+ fallback %s)", lstm_path, fallback_lstm)
 
     # ── Step 4: Generate embeddings for all rows ───────────────────────────────
     logger.info("=== Step 4/7 — Generating LSTM embeddings for all rows ===")
@@ -165,40 +167,72 @@ def run(ticker: str = "AAPL", years: int = 5) -> None:
     logger.info("Fused features saved → %s (%d rows)", parquet_path, len(fused_df))
 
     # ── Step 7: Train XGBoost ─────────────────────────────────────────────────
-    logger.info("=== Step 7/7 — Training XGBoost classifier ===")
-    X_xgb = fused_df[FEATURE_SCHEMA]
-    y_xgb = fused_df["target"].astype(int)
+    # NOTE: XGBoost must run in a fresh subprocess because PyTorch/FinBERT loaded
+    # in Step 5 pins OpenMP threads in this process, causing a segfault when
+    # XGBoost tries to initialise its own OpenMP context (Python 3.14 + macOS).
+    logger.info("=== Step 7/7 — Training XGBoost in subprocess (avoids OpenMP/PyTorch conflict) ===")
 
-    # Chronological split (no shuffle — prevent data leakage)
-    split_idx = int(len(X_xgb) * 0.8)
-    X_train, X_test = X_xgb.iloc[:split_idx], X_xgb.iloc[split_idx:]
-    y_train, y_test = y_xgb.iloc[:split_idx], y_xgb.iloc[split_idx:]
+    import subprocess, tempfile, os
 
-    predictor = XGBPredictor()
-    train_metrics = predictor.train(X_train, y_train)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        train_path = os.path.join(tmpdir, "train.parquet")
+        test_path  = os.path.join(tmpdir, "test.parquet")
+        split_idx  = int(len(fused_df) * 0.8)
+        fused_df.iloc[:split_idx].to_parquet(train_path)
+        fused_df.iloc[split_idx:].to_parquet(test_path)
 
-    y_pred = predictor._model.predict(X_test)
-    test_acc = accuracy_score(y_test, y_pred)
-    test_report = classification_report(y_test, y_pred, output_dict=True)
+        xgb_out_path   = str(models_dir / f"xgb_{ticker}.json")
+        metrics_ticker = str(models_dir / f"training_metrics_{ticker}.json")
+        metrics_gen    = str(models_dir / "training_metrics.json")
+        fallback_xgb   = str(models_dir / "xgb_v1.json")
+        project_root   = str(_PROJECT_ROOT)
 
-    logger.info("Test accuracy: %.2f%%", test_acc * 100)
-    logger.info("\n%s", classification_report(y_test, y_pred))
+        script = (
+            "import sys, json, shutil\n"
+            f"sys.path.insert(0, {project_root!r})\n"
+            "import pandas as pd\n"
+            "from sklearn.metrics import classification_report, accuracy_score\n"
+            "from modeling.xgb_classifier import XGBPredictor\n"
+            "from modeling.fusion import FEATURE_SCHEMA\n"
+            f"train_df = pd.read_parquet({train_path!r})\n"
+            f"test_df  = pd.read_parquet({test_path!r})\n"
+            "X_train = train_df[FEATURE_SCHEMA]; y_train = train_df['target'].astype(int)\n"
+            "X_test  = test_df[FEATURE_SCHEMA];  y_test  = test_df['target'].astype(int)\n"
+            "predictor = XGBPredictor()\n"
+            "train_metrics = predictor.train(X_train, y_train)\n"
+            "y_pred   = predictor._model.predict(X_test)\n"
+            "test_acc = accuracy_score(y_test, y_pred)\n"
+            "test_rep = classification_report(y_test, y_pred, output_dict=True)\n"
+            "print(f'Test accuracy: {test_acc*100:.2f}%')\n"
+            "print(classification_report(y_test, y_pred))\n"
+            f"predictor.save({xgb_out_path!r})\n"
+            f"shutil.copy2({xgb_out_path!r}, {fallback_xgb!r})\n"
+            "metrics = {\n"
+            f"    'ticker': {ticker!r},\n"
+            "    'train_accuracy': train_metrics['accuracy'],\n"
+            "    'test_accuracy': test_acc,\n"
+            "    'test_report': test_rep,\n"
+            "}\n"
+            f"paths = [{metrics_ticker!r}, {metrics_gen!r}]\n"
+            "for p in paths:\n"
+            "    open(p, 'w').write(__import__('json').dumps(metrics, indent=2))\n"
+            "print('XGBoost saved and metrics written.')\n"
+        )
 
-    xgb_path = models_dir / "xgb_v1.json"
-    predictor.save(xgb_path)
-    logger.info("XGBoost saved → %s", xgb_path)
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True, text=True
+        )
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                logger.info("[xgb-subprocess] %s", line)
+        if result.returncode != 0:
+            logger.error("XGBoost subprocess failed:\n%s", result.stderr)
+            raise RuntimeError(
+                f"XGBoost training subprocess exited with code {result.returncode}"
+            )
 
-    # Save metrics summary
-    metrics = {
-        "ticker": ticker,
-        "train_accuracy": train_metrics["accuracy"],
-        "test_accuracy": test_acc,
-        "test_report": test_report,
-    }
-    metrics_path = models_dir / "training_metrics.json"
-    with open(metrics_path, "w") as fh:
-        json.dump(metrics, fh, indent=2)
-    logger.info("Training metrics saved → %s", metrics_path)
+    logger.info("XGBoost saved → %s (+ fallback %s)", xgb_out_path, fallback_xgb)
     logger.info("=== Training pipeline complete ===")
 
 
