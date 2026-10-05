@@ -27,6 +27,13 @@ def render_sentiment_panel(
     """
     st.markdown('<h2>News Sentiment</h2>', unsafe_allow_html=True)
 
+    if not headlines:
+        st.info(
+            "Sentiment is unavailable because no news headlines were found. "
+            "Add NEWS_API_KEY in Streamlit Cloud app secrets to fetch live news."
+        )
+        return
+
     if sentiment_series.empty:
         st.info("No sentiment data available. Provide a NewsAPI key in the sidebar.")
         return
@@ -83,19 +90,12 @@ def render_sentiment_panel(
 
     # ── Headlines table ────────────────────────────────────────────────────
     st.markdown('<h3>Recent Headlines</h3>', unsafe_allow_html=True)
-    if headlines:
-        for i, h in enumerate(headlines[:30]):
-            st.markdown(
-                f'<div class="ss-card" style="padding:12px 16px;margin-bottom:8px;">'
-                f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:9pt;'
-                f'color:#4A4A4A;">{i+1}.</span>&nbsp;'
-                f'<span style="font-size:10pt;">{h}</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-    else:
+    for i, h in enumerate(headlines[:30]):
         st.markdown(
-            '<div class="stale-notice">No headlines found. '
-            'Add a NewsAPI key in the sidebar to fetch live news.</div>',
+            f'<div class="ss-card" style="padding:12px 16px;margin-bottom:8px;">'
+            f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:9pt;'
+            f'color:#4A4A4A;">{i+1}.</span>&nbsp;'
+            f'<span style="font-size:10pt;">{h}</span>'
+            f'</div>',
             unsafe_allow_html=True,
         )

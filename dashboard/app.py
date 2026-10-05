@@ -252,17 +252,24 @@ def run_inference(ticker: str, start_date: date, end_date: date) -> dict:
                 result["prob_up"] = prob_up
                 result["fused"] = fused
 
-                # SHAP
-                from explainability.shap_explainer import explain
-                model_path = _PROJECT_ROOT / "models" / f"xgb_{ticker}.json"
-                result["shap_contributions"] = explain(fused, model_path=model_path)
-
             except Exception as exc:
                 logger.error("Inference error: %s", exc)
                 result["direction"] = "—"
                 result["prob_up"] = 0.5
                 result["shap_contributions"] = []
                 result["inference_error"] = str(exc)
+            else:
+                try:
+                    from explainability.shap_explainer import explain
+
+                    model_path = _PROJECT_ROOT / "models" / f"xgb_{ticker}.json"
+                    result["shap_contributions"] = explain(
+                        fused, model_path=model_path
+                    )
+                except Exception as exc:
+                    logger.exception("SHAP explanation failed for %s", ticker)
+                    result["shap_contributions"] = []
+                    result["shap_error"] = str(exc)
     else:
         result["direction"] = "—"
         result["prob_up"] = 0.5
@@ -416,10 +423,14 @@ def main():
         )
     with k3:
         sent = result.get("daily_sentiment", {})
-        fb = sent.get("finbert_sentiment", 0.0)
+        fb = (
+            f'{sent["finbert_sentiment"]:+.2f}'
+            if sent.get("headline_count", 0) > 0
+            else "N/A"
+        )
         st.markdown(
             f'<div class="kpi-card"><div class="kpi-label">FinBERT Sentiment</div>'
-            f'<div class="kpi-value" style="font-size:20pt;">{fb:+.2f}</div></div>',
+            f'<div class="kpi-value" style="font-size:20pt;">{fb}</div></div>',
             unsafe_allow_html=True,
         )
     with k4:
@@ -467,14 +478,18 @@ def main():
     with tab_prediction:
         if not result.get("models_missing") and direction != "—":
             render_prediction_card(direction, prob_up, latest_close, ticker)
+        elif result.get("inference_error"):
+            st.error(f"Prediction failed: {result['inference_error']}")
         else:
             st.info(
-                "Prediction not available. Train the models first.\n\n"
+                "Prediction not available because the required model files are missing.\n\n"
                 "```\npython -m modeling.train_pipeline --ticker AAPL\n```"
             )
 
     with tab_shap:
         shap_contribs = result.get("shap_contributions", [])
+        if result.get("shap_error"):
+            st.warning(f"SHAP explanation failed: {result['shap_error']}")
         render_shap_panel(shap_contribs)
 
     with tab_raw:

@@ -25,8 +25,8 @@ def render_shap_panel(shap_contributions: list[dict]) -> None:
 
     if not shap_contributions:
         st.info(
-            "SHAP explanations are unavailable. "
-            "Train the models first using the training pipeline."
+            "SHAP feature contributions could not be computed for this prediction. "
+            "Check any error details above and try running the prediction again."
         )
         return
 
