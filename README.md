@@ -158,6 +158,7 @@ app URL after deployment.
 ### Sentiment Analysis
 - **FinBERT** (`ProsusAI/finbert`): transformer-based, maps labels to +1/0/−1 × confidence
 - **VADER**: lexicon-based, compound score in [−1, +1]
+- FinBERT processes headlines in batches, and repeated sentiment results are cached by the dashboard for one hour. The first FinBERT use may still take longer while its ~440 MB model is downloaded and loaded.
 
 ---
 

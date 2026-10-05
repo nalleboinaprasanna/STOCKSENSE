@@ -107,6 +107,12 @@ def load_headlines(ticker: str, has_news_api_key: bool):
     return fetch_news_headlines(ticker, days=30)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sentiment(headlines: tuple[str, ...]) -> dict:
+    from sentiment.aggregator import score_sentiment
+    return score_sentiment(list(headlines))
+
+
 @st.cache_resource(show_spinner=False)
 def load_lstm_embedder(ticker: str = ""):
     from modeling.lstm_model import LSTMEmbedder
@@ -200,8 +206,7 @@ def run_inference(ticker: str, start_date: date, end_date: date) -> dict:
         headlines = load_headlines(ticker, has_news_api_key)
     result["headlines"] = headlines
 
-    from sentiment.aggregator import score_sentiment
-    daily_sent = score_sentiment(headlines)
+    daily_sent = load_sentiment(tuple(headlines))
 
     # Build a simple single-day sentiment series for the chart
     sent_series = pd.DataFrame(

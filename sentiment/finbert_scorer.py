@@ -65,7 +65,7 @@ def score_finbert(headlines: list[str]) -> list[float]:
     for i in range(0, len(headlines), _BATCH_SIZE):
         batch = headlines[i : i + _BATCH_SIZE]
         try:
-            results = pipe(batch)
+            results = pipe(batch, batch_size=_BATCH_SIZE)
             for r in results:
                 direction = _LABEL_MAP.get(r["label"].lower(), 0.0)
                 scores.append(direction * r["score"])
