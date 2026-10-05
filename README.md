@@ -116,8 +116,11 @@ an app with:
   are compatible with it)
 
 The supported ticker models are included under `models/` so predictions work
-after deployment. A NewsAPI key is optional; to enable live news headlines,
-add this in the app's Streamlit Cloud **Secrets** settings:
+after deployment. Cached OHLCV snapshots for the supported tickers are also
+included as a fallback if Yahoo Finance is unavailable from the hosting
+environment; live data is used whenever the provider responds. A NewsAPI key
+is optional; to enable live news headlines, add this in the app's Streamlit
+Cloud **Secrets** settings:
 
 ```toml
 NEWS_API_KEY = "your-newsapi-key"

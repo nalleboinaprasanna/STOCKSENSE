@@ -18,6 +18,14 @@ env/
 
 # Data (raw and processed — regenerated from source)
 data/raw/
+!data/raw/
+data/raw/*
+!data/raw/prices/
+data/raw/prices/*
+!data/raw/prices/AAPL.csv
+!data/raw/prices/GOOGL.csv
+!data/raw/prices/MSFT.csv
+!data/raw/prices/TSLA.csv
 data/processed/
 
 # Model artifacts used by the public dashboard
