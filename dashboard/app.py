@@ -362,7 +362,7 @@ def render_sidebar() -> tuple[str, date, date, bool]:
         if not api_key or api_key == "your_newsapi_key_here":
             st.markdown(
                 '<div class="stale-notice">No NewsAPI key — '
-                'set NEWS_API_KEY in .env for live headlines.</div>',
+                'set NEWS_API_KEY in Streamlit Cloud app secrets for live headlines.</div>',
                 unsafe_allow_html=True,
             )
 
