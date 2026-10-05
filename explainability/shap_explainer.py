@@ -24,32 +24,38 @@ _MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
 _XGB_MODEL_PATH = _MODEL_DIR / "xgb_v1.json"
 
 
-@lru_cache(maxsize=1)
-def _load_explainer():
+@lru_cache(maxsize=4)
+def _load_explainer(model_path: str):
     """Load SHAP TreeExplainer once and cache it in memory."""
     import shap
     from xgboost import XGBClassifier
 
-    if not _XGB_MODEL_PATH.exists():
+    path = Path(model_path)
+    if not path.exists():
         raise FileNotFoundError(
-            f"XGBoost model not found at {_XGB_MODEL_PATH}. "
+            f"XGBoost model not found at {path}. "
             "Run the training pipeline first."
         )
 
     model = XGBClassifier()
-    model.load_model(str(_XGB_MODEL_PATH))
+    model.load_model(str(path))
     explainer = shap.TreeExplainer(model)
     logger.info("SHAP TreeExplainer loaded.")
     return explainer
 
 
-def explain(fused_vector: pd.Series) -> list[dict]:
+def explain(
+    fused_vector: pd.Series,
+    model_path: str | Path = _XGB_MODEL_PATH,
+) -> list[dict]:
     """Compute SHAP feature contributions for one prediction.
 
     Parameters
     ----------
     fused_vector : pd.Series
         31-dimensional feature vector (output of ``fuse_features``).
+    model_path : str | Path
+        XGBoost model to explain. Defaults to the generic v1 model.
 
     Returns
     -------
@@ -58,7 +64,7 @@ def explain(fused_vector: pd.Series) -> list[dict]:
         sorted by ``|shap_value|`` descending (most impactful first).
     """
     try:
-        explainer = _load_explainer()
+        explainer = _load_explainer(str(Path(model_path).resolve()))
     except FileNotFoundError as exc:
         logger.warning("SHAP explainer unavailable: %s", exc)
         return []

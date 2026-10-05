@@ -254,7 +254,8 @@ def run_inference(ticker: str, start_date: date, end_date: date) -> dict:
 
                 # SHAP
                 from explainability.shap_explainer import explain
-                result["shap_contributions"] = explain(fused)
+                model_path = _PROJECT_ROOT / "models" / f"xgb_{ticker}.json"
+                result["shap_contributions"] = explain(fused, model_path=model_path)
 
             except Exception as exc:
                 logger.error("Inference error: %s", exc)
