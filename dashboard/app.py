@@ -100,6 +100,9 @@ def load_indicators(ticker: str, years: int):
 
 @st.cache_data(ttl=43200, show_spinner=False)
 def load_headlines(ticker: str, has_news_api_key: bool):
+    api_key = os.getenv("NEWS_API_KEY", "")
+    if has_news_api_key != bool(api_key and api_key != "your_newsapi_key_here"):
+        logger.info("NewsAPI key availability changed while loading headlines.")
     from collection.news_fetcher import fetch_news_headlines
     return fetch_news_headlines(ticker, days=30)
 
@@ -160,7 +163,7 @@ def run_inference(ticker: str, start_date: date, end_date: date) -> dict:
         direction, prob_up, shap_contributions, sentiment_series,
         headlines, ohlcv, indicators, error (optional)
     """
-    result: dict = {}
+    result: dict = {"ticker": ticker}
     years = min(10, max(1, ((end_date - start_date).days + 364) // 365))
 
     # ── Load data ─────────────────────────────────────────────────────────────
@@ -390,15 +393,20 @@ def main():
     if "result" not in st.session_state:
         st.session_state.result = None
 
+    previous_result = st.session_state.result
     if (
         run_btn
-        or st.session_state.result is None
+        or previous_result is None
         or st.session_state.get("inference_params") != inference_params
+        or previous_result.get("ticker") != ticker
     ):
         st.session_state.result = run_inference(ticker, start_date, end_date)
         st.session_state.inference_params = inference_params
 
     result = st.session_state.result
+    if result.get("ticker") != ticker:
+        st.info(f"Loading {ticker} results. Please wait for the current prediction to finish.")
+        st.stop()
 
     if "error" in result:
         st.error(f"Data fetch error: {result['error']}")

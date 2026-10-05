@@ -173,7 +173,7 @@ pytest tests/ -v
 
 | Failure | Behaviour |
 |---|---|
-| yfinance request fails | Falls back to last cached CSV; "data may be stale" notice shown |
+| yfinance request fails or times out | Falls back to the last cached CSV; requests time out after 5 seconds |
 | No headlines | Sentiment defaults to 0.0; headline_count=0 flagged in SHAP panel |
 | Feature schema mismatch | Fusion raises `ValueError` — pipeline fails loudly |
 | Model artefact missing | Dashboard shows clear missing-model notice; charts still render |

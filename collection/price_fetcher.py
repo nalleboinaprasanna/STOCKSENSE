@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CACHE_DIR = _PROJECT_ROOT / "data" / "raw" / "prices"
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_DOWNLOAD_TIMEOUT_SECONDS = 5
 
 
 def fetch_price_history(ticker: str, years: int = 5) -> pd.DataFrame:
@@ -76,8 +77,15 @@ def fetch_price_history(ticker: str, years: int = 5) -> pd.DataFrame:
     start = end - timedelta(days=years * 365 + 10)  # +10 for market holidays
     logger.info("Fetching %s from yfinance [%s → %s]", ticker, start.date(), end.date())
 
-    raw = yf.download(ticker, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"),
-                      progress=False, auto_adjust=True)
+    raw = yf.download(
+        ticker,
+        start=start.strftime("%Y-%m-%d"),
+        end=end.strftime("%Y-%m-%d"),
+        progress=False,
+        auto_adjust=True,
+        threads=False,
+        timeout=_DOWNLOAD_TIMEOUT_SECONDS,
+    )
 
     if raw.empty:
         if cache_path.exists():

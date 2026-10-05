@@ -78,7 +78,7 @@ def fetch_news_headlines(ticker: str, days: int = 30) -> list[str]:
     }
 
     try:
-        resp = requests.get(_NEWSAPI_BASE, params=params, timeout=15)
+        resp = requests.get(_NEWSAPI_BASE, params=params, timeout=5)
         resp.raise_for_status()
         articles = resp.json().get("articles", [])
         headlines = [a["title"] for a in articles if a.get("title")]
