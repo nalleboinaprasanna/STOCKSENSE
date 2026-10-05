@@ -1,7 +1,4 @@
-"""
-explainability/shap_explainer.py
-
-SHAP explanations for the XGBoost model using TreeExplainer.
+"""SHAP explanations for XGBoost models using native TreeSHAP contributions.
 
 Public contract (Architecture Bible §09):
     explain(fused_vector: pd.Series) -> list[dict]
@@ -25,10 +22,9 @@ _XGB_MODEL_PATH = _MODEL_DIR / "xgb_v1.json"
 
 
 @lru_cache(maxsize=4)
-def _load_explainer(model_path: str):
-    """Load SHAP TreeExplainer once and cache it in memory."""
-    import shap
-    from xgboost import XGBClassifier
+def _load_booster(model_path: str):
+    """Load an XGBoost booster once and cache it in memory."""
+    import xgboost as xgb
 
     path = Path(model_path)
     if not path.exists():
@@ -37,11 +33,10 @@ def _load_explainer(model_path: str):
             "Run the training pipeline first."
         )
 
-    model = XGBClassifier()
-    model.load_model(str(path))
-    explainer = shap.TreeExplainer(model)
-    logger.info("SHAP TreeExplainer loaded.")
-    return explainer
+    booster = xgb.Booster()
+    booster.load_model(str(path))
+    logger.info("XGBoost booster loaded for native TreeSHAP contributions.")
+    return booster
 
 
 def explain(
@@ -64,20 +59,25 @@ def explain(
         sorted by ``|shap_value|`` descending (most impactful first).
     """
     try:
-        explainer = _load_explainer(str(Path(model_path).resolve()))
+        booster = _load_booster(str(Path(model_path).resolve()))
     except FileNotFoundError as exc:
         logger.warning("SHAP explainer unavailable: %s", exc)
         return []
 
-    X = fused_vector.values.reshape(1, -1)
-    shap_values = explainer.shap_values(X)
+    import xgboost as xgb
 
-    # shap_values may be (1, 31) or list[(1,31), (1,31)] for binary
-    if isinstance(shap_values, list):
-        # Use class-1 (UP) SHAP values
-        sv = shap_values[1][0]
-    else:
-        sv = shap_values[0]
+    feature_names = booster.feature_names
+    if feature_names and list(fused_vector.index) != feature_names:
+        raise ValueError("Input feature names do not match the XGBoost model.")
+
+    X = fused_vector.to_numpy(dtype=np.float32).reshape(1, -1)
+    matrix = xgb.DMatrix(X, feature_names=feature_names)
+    # The last column is the expected value (bias), not a feature contribution.
+    sv = booster.predict(matrix, pred_contribs=True)[0, :-1]
+    if len(sv) != len(fused_vector):
+        raise ValueError(
+            f"Expected {len(fused_vector)} SHAP values, received {len(sv)}."
+        )
 
     contributions = [
         {"feature": name, "shap_value": float(val)}
