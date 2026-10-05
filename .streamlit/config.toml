@@ -1,6 +1,6 @@
 [server]
 headless = true
-showEmailPrompt = false
+fileWatcherType = "none"
 
 [theme]
 base = "light"
