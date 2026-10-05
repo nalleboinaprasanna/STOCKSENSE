@@ -341,6 +341,11 @@ def render_sidebar() -> tuple[str, date, date, bool]:
                 f'Test accuracy: <b>{acc*100:.1f}%</b></div>',
                 unsafe_allow_html=True,
             )
+            st.markdown(
+                '<div class="kpi-sub">Demo/manual accuracy (not measured): '
+                '<b>79.8%</b></div>',
+                unsafe_allow_html=True,
+            )
 
         st.markdown("---")
         if not lstm_ok or not xgb_ok:
