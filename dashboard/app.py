@@ -99,7 +99,7 @@ def load_indicators(ticker: str, years: int):
 
 
 @st.cache_data(ttl=43200, show_spinner=False)
-def load_headlines(ticker: str):
+def load_headlines(ticker: str, has_news_api_key: bool):
     from collection.news_fetcher import fetch_news_headlines
     return fetch_news_headlines(ticker, days=30)
 
@@ -192,7 +192,9 @@ def run_inference(ticker: str, start_date: date, end_date: date) -> dict:
 
     # ── Headlines + sentiment ─────────────────────────────────────────────────
     with st.spinner("Fetching news headlines…"):
-        headlines = load_headlines(ticker)
+        api_key = os.getenv("NEWS_API_KEY", "")
+        has_news_api_key = bool(api_key and api_key != "your_newsapi_key_here")
+        headlines = load_headlines(ticker, has_news_api_key)
     result["headlines"] = headlines
 
     from sentiment.aggregator import score_sentiment

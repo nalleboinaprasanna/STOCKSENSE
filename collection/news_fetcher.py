@@ -53,12 +53,15 @@ def fetch_news_headlines(ticker: str, days: int = 30) -> list[str]:
     today_str = datetime.today().strftime("%Y-%m-%d")
     cache_path = _CACHE_DIR / f"{ticker}_{today_str}.json"
 
-    if cache_path.exists():
-        logger.info("News cache hit for %s on %s", ticker, today_str)
-        with open(cache_path) as fh:
-            return json.load(fh)
-
     api_key = os.getenv("NEWS_API_KEY", "")
+    if cache_path.exists():
+        with open(cache_path) as fh:
+            cached_headlines = json.load(fh)
+        if cached_headlines:
+            logger.info("News cache hit for %s on %s", ticker, today_str)
+            return cached_headlines
+        logger.info("Today's news cache is empty for %s; checking NewsAPI.", ticker)
+
     if not api_key or api_key == "your_newsapi_key_here":
         logger.warning("NEWS_API_KEY not set — using cached headlines or empty list.")
         return _load_latest_cache(ticker)
